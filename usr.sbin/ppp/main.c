@@ -356,8 +356,13 @@ main(int argc, char **argv)
   ID0init();
   if (ID0realuid() != 0) {
     char conf[200], *ptr;
+    char *confdir;
 
-    snprintf(conf, sizeof conf, "%s/%s", PPP_CONFDIR, CONFFILE);
+    confdir = getenv("PPP_CONFDIR");
+    if (confdir == NULL)
+      confdir = PPP_CONFDIR;
+
+    snprintf(conf, sizeof conf, "%s/%s", confdir, CONFFILE);
     do {
       struct stat sb;
 

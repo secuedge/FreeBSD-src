@@ -50,8 +50,13 @@ OpenSecret(const char *file)
 {
   FILE *fp;
   char line[100];
+  char *confdir;
 
-  snprintf(line, sizeof line, "%s/%s", PPP_CONFDIR, file);
+  confdir = getenv("PPP_CONFDIR");
+  if (confdir == NULL)
+    confdir = PPP_CONFDIR;
+
+  snprintf(line, sizeof line, "%s/%s", confdir, file);
   fp = ID0fopen(line, "r");
   if (fp == NULL)
     log_Printf(LogWARN, "OpenSecret: Can't open %s.\n", line);
@@ -328,11 +333,15 @@ ReadSystem(struct bundle *bundle, const char *name, const char *file,
   int indent;
   char arg[LINE_LEN];
   struct prompt *op;
+  char *confdir;
 
+  confdir = getenv("PPP_CONFDIR");
+  if (confdir == NULL)
+    confdir = PPP_CONFDIR;
   if (*file == '/')
     snprintf(filename, sizeof filename, "%s", file);
   else
-    snprintf(filename, sizeof filename, "%s/%s", PPP_CONFDIR, file);
+    snprintf(filename, sizeof filename, "%s/%s", confdir, file);
   fp = ID0fopen(filename, "r");
   if (fp == NULL) {
     log_Printf(LogDEBUG, "ReadSystem: Can't open %s.\n", filename);
