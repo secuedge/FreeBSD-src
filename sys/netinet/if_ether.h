@@ -121,6 +121,11 @@ void	arprequest(struct ifnet *, const struct in_addr *,
 	    const struct in_addr *, u_char *);
 void	arp_ifinit(struct ifnet *, struct ifaddr *);
 void	arp_announce_ifaddr(struct ifnet *, struct in_addr addr, u_char *);
+
+typedef void pppoe_input_t(int, struct mbuf *);
+VNET_DECLARE(pppoe_input_t *, pppoe_input_ptr);
+#define	V_pppoe_input_ptr	VNET(pppoe_input_ptr)
+
 #endif
 
 #endif

@@ -98,6 +98,7 @@ CTASSERT(sizeof (struct ether_addr) == ETHER_ADDR_LEN);
 #endif
 
 VNET_DEFINE(pfil_head_t, link_pfil_head);	/* Packet filter hooks */
+VNET_DEFINE(pppoe_input_t *, pppoe_input_ptr);
 
 /* netgraph node hooks for ng_ether(4) */
 void	(*ng_ether_input_p)(struct ifnet *ifp, struct mbuf **mp);
@@ -932,6 +933,13 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 		isr = NETISR_IPV6;
 		break;
 #endif
+	case ETHERTYPE_PPPOEDISC:
+	case ETHERTYPE_PPPOE:
+		if (V_pppoe_input_ptr != NULL) {
+			V_pppoe_input_ptr(ether_type, m);
+			return;
+		}
+	/* fallthrough */
 	default:
 		goto discard;
 	}
