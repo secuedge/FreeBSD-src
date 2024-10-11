@@ -149,8 +149,8 @@ pf_match_translation(struct pf_pdesc *pd,
 
 		if (r->action == PF_BINAT && pd->dir == PF_IN) {
 			src = &r->dst;
-			if (r->rpool.cur != NULL)
-				xdst = &r->rpool.cur->addr;
+			if (r->rdr.cur != NULL)
+				xdst = &r->rdr.cur->addr;
 		} else {
 			src = &r->src;
 			dst = &r->dst;
@@ -241,7 +241,7 @@ pf_get_sport(sa_family_t af, u_int8_t proto, struct pf_krule *r,
 	 * from the mapping. In this case we have to look up the src_node as
 	 * pf_map_addr would.
 	 */
-	if (proto == IPPROTO_UDP && (r->rpool.opts & PF_POOL_ENDPI)) {
+	if (proto == IPPROTO_UDP && (r->rdr.opts & PF_POOL_ENDPI)) {
 		struct pf_udp_endpoint_cmp udp_source;
 
 		bzero(&udp_source, sizeof(udp_source));
@@ -253,8 +253,8 @@ pf_get_sport(sa_family_t af, u_int8_t proto, struct pf_krule *r,
 			PF_ACPY(naddr, &(*udp_mapping)->endpoints[1].addr, af);
 			*nport = (*udp_mapping)->endpoints[1].port;
 			/* Try to find a src_node as per pf_map_addr(). */
-			if (*sn == NULL && r->rpool.opts & PF_POOL_STICKYADDR &&
-			    (r->rpool.opts & PF_POOL_TYPEMASK) != PF_POOL_NONE)
+			if (*sn == NULL && r->rdr.opts & PF_POOL_STICKYADDR &&
+			    (r->rdr.opts & PF_POOL_TYPEMASK) != PF_POOL_NONE)
 				*sn = pf_find_src_node(saddr, r, af, &sh, 0);
 			return (0);
 		} else {
@@ -362,7 +362,7 @@ pf_get_sport(sa_family_t af, u_int8_t proto, struct pf_krule *r,
 			tmp = cut;
 			for (tmp -= 1; tmp >= low && tmp <= 0xffff; --tmp) {
 				if (proto == IPPROTO_UDP &&
-				    (r->rpool.opts & PF_POOL_ENDPI)) {
+				    (r->rdr.opts & PF_POOL_ENDPI)) {
 					(*udp_mapping)->endpoints[1].port = htons(tmp);
 					if (pf_udp_mapping_insert(*udp_mapping) == 0) {
 						*nport = htons(tmp);
@@ -378,7 +378,7 @@ pf_get_sport(sa_family_t af, u_int8_t proto, struct pf_krule *r,
 			}
 		}
 
-		switch (r->rpool.opts & PF_POOL_TYPEMASK) {
+		switch (r->rdr.opts & PF_POOL_TYPEMASK) {
 		case PF_POOL_RANDOM:
 		case PF_POOL_ROUNDROBIN:
 			/*
@@ -420,13 +420,13 @@ pf_get_mape_sport(sa_family_t af, u_int8_t proto, struct pf_krule *r,
 	uint16_t i, ahigh, cut;
 	int ashift, psidshift;
 
-	ashift = 16 - r->rpool.mape.offset;
-	psidshift = ashift - r->rpool.mape.psidlen;
-	psmask = r->rpool.mape.psid & ((1U << r->rpool.mape.psidlen) - 1);
+	ashift = 16 - r->rdr.mape.offset;
+	psidshift = ashift - r->rdr.mape.psidlen;
+	psmask = r->rdr.mape.psid & ((1U << r->rdr.mape.psidlen) - 1);
 	psmask = psmask << psidshift;
 	highmask = (1U << psidshift) - 1;
 
-	ahigh = (1U << r->rpool.mape.offset) - 1;
+	ahigh = (1U << r->rdr.mape.offset) - 1;
 	cut = arc4random() & ahigh;
 	if (cut == 0)
 		cut = 1;
@@ -451,7 +451,7 @@ pf_map_addr(sa_family_t af, struct pf_krule *r, struct pf_addr *saddr,
     struct pf_addr *naddr, struct pfi_kkif **nkif, struct pf_addr *init_addr)
 {
 	u_short			 reason = PFRES_MATCH;
-	struct pf_kpool		*rpool = &r->rpool;
+	struct pf_kpool		*rpool = &r->rdr;
 	struct pf_addr		*raddr = NULL, *rmask = NULL;
 
 	mtx_lock(&rpool->mtx);
@@ -626,13 +626,13 @@ pf_map_addr_sn(sa_family_t af, struct pf_krule *r, struct pf_addr *saddr,
     struct pf_ksrc_node **sn)
 {
 	u_short			 reason = 0;
-	struct pf_kpool		*rpool = &r->rpool;
+	struct pf_kpool		*rpool = &r->rdr;
 	struct pf_srchash	*sh = NULL;
 
 	/* Try to find a src_node if none was given and this
 	   is a sticky-address rule. */
-	if (*sn == NULL && r->rpool.opts & PF_POOL_STICKYADDR &&
-	    (r->rpool.opts & PF_POOL_TYPEMASK) != PF_POOL_NONE)
+	if (*sn == NULL && r->rdr.opts & PF_POOL_STICKYADDR &&
+	    (r->rdr.opts & PF_POOL_TYPEMASK) != PF_POOL_NONE)
 		*sn = pf_find_src_node(saddr, r, af, &sh, false);
 
 	/* If a src_node was found or explicitly given and it has a non-zero
@@ -760,18 +760,18 @@ pf_get_translation(struct pf_pdesc *pd, int off,
 			low = 1;
 			high = 65535;
 		} else {
-			low  = r->rpool.proxy_port[0];
-			high = r->rpool.proxy_port[1];
+			low  = r->rdr.proxy_port[0];
+			high = r->rdr.proxy_port[1];
 		}
-		if (r->rpool.mape.offset > 0) {
+		if (r->rdr.mape.offset > 0) {
 			if (pf_get_mape_sport(pd->af, pd->proto, r, saddr,
 			    sport, daddr, dport, naddr, nportp, sn, udp_mapping)) {
 				DPFPRINTF(PF_DEBUG_MISC,
 				    ("pf: MAP-E port allocation (%u/%u/%u)"
 				    " failed\n",
-				    r->rpool.mape.offset,
-				    r->rpool.mape.psidlen,
-				    r->rpool.mape.psid));
+				    r->rdr.mape.offset,
+				    r->rdr.mape.psidlen,
+				    r->rdr.mape.psid));
 				reason = PFRES_MAPFAILED;
 				goto notrans;
 			}
@@ -779,7 +779,7 @@ pf_get_translation(struct pf_pdesc *pd, int off,
 		    daddr, dport, naddr, nportp, low, high, sn, udp_mapping)) {
 			DPFPRINTF(PF_DEBUG_MISC,
 			    ("pf: NAT proxy port allocation (%u-%u) failed\n",
-			    r->rpool.proxy_port[0], r->rpool.proxy_port[1]));
+			    r->rdr.proxy_port[0], r->rdr.proxy_port[1]));
 			reason = PFRES_MAPFAILED;
 			goto notrans;
 		}
@@ -787,41 +787,41 @@ pf_get_translation(struct pf_pdesc *pd, int off,
 	case PF_BINAT:
 		switch (pd->dir) {
 		case PF_OUT:
-			if (r->rpool.cur->addr.type == PF_ADDR_DYNIFTL){
+			if (r->rdr.cur->addr.type == PF_ADDR_DYNIFTL){
 				switch (pd->af) {
 #ifdef INET
 				case AF_INET:
-					if (r->rpool.cur->addr.p.dyn->
+					if (r->rdr.cur->addr.p.dyn->
 					    pfid_acnt4 < 1) {
 						reason = PFRES_MAPFAILED;
 						goto notrans;
 					}
 					PF_POOLMASK(naddr,
-					    &r->rpool.cur->addr.p.dyn->
+					    &r->rdr.cur->addr.p.dyn->
 					    pfid_addr4,
-					    &r->rpool.cur->addr.p.dyn->
+					    &r->rdr.cur->addr.p.dyn->
 					    pfid_mask4, saddr, AF_INET);
 					break;
 #endif /* INET */
 #ifdef INET6
 				case AF_INET6:
-					if (r->rpool.cur->addr.p.dyn->
+					if (r->rdr.cur->addr.p.dyn->
 					    pfid_acnt6 < 1) {
 						reason = PFRES_MAPFAILED;
 						goto notrans;
 					}
 					PF_POOLMASK(naddr,
-					    &r->rpool.cur->addr.p.dyn->
+					    &r->rdr.cur->addr.p.dyn->
 					    pfid_addr6,
-					    &r->rpool.cur->addr.p.dyn->
+					    &r->rdr.cur->addr.p.dyn->
 					    pfid_mask6, saddr, AF_INET6);
 					break;
 #endif /* INET6 */
 				}
 			} else
 				PF_POOLMASK(naddr,
-				    &r->rpool.cur->addr.v.a.addr,
-				    &r->rpool.cur->addr.v.a.mask, saddr,
+				    &r->rdr.cur->addr.v.a.addr,
+				    &r->rdr.cur->addr.v.a.mask, saddr,
 				    pd->af);
 			break;
 		case PF_IN:
@@ -866,27 +866,27 @@ pf_get_translation(struct pf_pdesc *pd, int off,
 		reason = pf_map_addr_sn(pd->af, r, saddr, naddr, NULL, NULL, sn);
 		if (reason != 0)
 			goto notrans;
-		if ((r->rpool.opts & PF_POOL_TYPEMASK) == PF_POOL_BITMASK)
-			PF_POOLMASK(naddr, naddr, &r->rpool.cur->addr.v.a.mask,
+		if ((r->rdr.opts & PF_POOL_TYPEMASK) == PF_POOL_BITMASK)
+			PF_POOLMASK(naddr, naddr, &r->rdr.cur->addr.v.a.mask,
 			    daddr, pd->af);
 
 		/* Do not change SCTP ports. */
 		if (pd->proto == IPPROTO_SCTP)
 			break;
 
-		if (r->rpool.proxy_port[1]) {
+		if (r->rdr.proxy_port[1]) {
 			uint32_t	tmp_nport;
 
 			tmp_nport = ((ntohs(dport) - ntohs(r->dst.port[0])) %
-			    (r->rpool.proxy_port[1] - r->rpool.proxy_port[0] +
-			    1)) + r->rpool.proxy_port[0];
+			    (r->rdr.proxy_port[1] - r->rdr.proxy_port[0] +
+			    1)) + r->rdr.proxy_port[0];
 
 			/* Wrap around if necessary. */
 			if (tmp_nport > 65535)
 				tmp_nport -= 65535;
 			nport = htons((uint16_t)tmp_nport);
-		} else if (r->rpool.proxy_port[0])
-			nport = htons(r->rpool.proxy_port[0]);
+		} else if (r->rdr.proxy_port[0])
+			nport = htons(r->rdr.proxy_port[0]);
 		else
 			nport = dport;
 

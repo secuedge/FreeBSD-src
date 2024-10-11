@@ -262,6 +262,7 @@ enum pf_rule_type_t {
 	PF_RT_ANCHOR_CALL	= 72, /* string */
 	PF_RT_RCV_IFNAME	= 73, /* string */
 	PF_RT_MAX_SRC_CONN	= 74, /* u32 */
+	PF_RT_NAT		= 75, /* nested, pf_rpool_type_t */
 };
 
 enum pf_addrule_type_t {
@@ -381,6 +382,7 @@ enum pf_add_addr_types_t {
 	PF_AA_AF		= 7, /* u8 */
 	PF_AA_ANCHOR		= 8, /* string */
 	PF_AA_ADDR		= 9, /* nested, pf_pooladdr */
+	PF_AA_WHICH		= 10, /* u32 */
 };
 
 enum pf_get_rulesets_types_t {
