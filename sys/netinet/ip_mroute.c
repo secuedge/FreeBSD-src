@@ -2735,6 +2735,9 @@ sysctl_mfctable(SYSCTL_HANDLER_ARGS)
 		return (error);
 
 	MRW_RLOCK();
+	if (V_mfchashtbl == NULL)
+		goto out_locked;
+
 	for (i = 0; i < mfchashsize; i++) {
 		LIST_FOREACH(rt, &V_mfchashtbl[i], mfc_hash) {
 			error = SYSCTL_OUT(req, rt, sizeof(struct mfc));
