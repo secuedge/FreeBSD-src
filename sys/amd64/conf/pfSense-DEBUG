@@ -14,7 +14,6 @@ nooptions	COMPAT_FREEBSD7	# Compatible with FreeBSD7
 options 	GEOM_MIRROR
 options 	GEOM_UZIP
 options 	GEOM_ELI
-options 	GEOM_BDE
 
 options 	TMPFS
 options 	NULLFS
