@@ -316,7 +316,7 @@
  */
 #define	PRIV_NET_BRIDGE		390	/* Administer bridge. */
 #define	PRIV_NET_GRE		391	/* Administer GRE. */
-#define	_PRIV_NET_PPP		392	/* Removed. */
+#define	PRIV_NET_PPP		392	/* PPP */
 #define	_PRIV_NET_SLIP		393	/* Removed. */
 #define	PRIV_NET_BPF		394	/* Monitor BPF. */
 #define	PRIV_NET_RAW		395	/* Open raw socket. */
