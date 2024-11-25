@@ -637,6 +637,7 @@ void if_setnetmapadapter(if_t ifp, struct netmap_adapter *na);
 struct netmap_adapter *if_getnetmapadapter(if_t ifp);
 void if_input(if_t ifp, struct mbuf* sendmp);
 int if_sendq_prepend(if_t ifp, struct mbuf *m);
+int if_sendq_enqueue(if_t ifp, struct mbuf *m);
 struct mbuf *if_dequeue(if_t ifp);
 int if_setifheaderlen(if_t ifp, int len);
 void if_setrcvif(struct mbuf *m, if_t ifp);

@@ -4879,6 +4879,29 @@ if_sendq_prepend(if_t ifp, struct mbuf *m)
 }
 
 int
+if_sendq_enqueue(if_t ifp, struct mbuf *m)
+{
+	struct ifaltq *ifq = &ifp->if_snd;
+	int err;
+
+	IF_LOCK(ifq);\
+	if (ALTQ_IS_ENABLED(ifq))
+		ALTQ_ENQUEUE(ifq, m, NULL, err);
+	else {
+		if (_IF_QFULL(ifq)) {
+			m_freem(m);
+			err = ENOBUFS;
+		} else {
+			_IF_ENQUEUE(ifq, m);
+			err = 0;
+		}
+	}
+	IF_UNLOCK(ifq);
+
+	return (err);
+}
+
+int
 if_setifheaderlen(if_t ifp, int len)
 {
 	ifp->if_hdrlen = len;
