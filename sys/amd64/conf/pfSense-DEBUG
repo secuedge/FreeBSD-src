@@ -19,6 +19,8 @@ options 	TMPFS
 options 	NULLFS
 options 	PPS_SYNC
 
+options 	KDTRACE_MIB_SDT
+
 # Wireless
 nooptions	IEEE80211_DEBUG	# enable debug msgs
 device		wlan_rssadapt

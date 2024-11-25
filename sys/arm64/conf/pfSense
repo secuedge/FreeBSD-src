@@ -19,6 +19,8 @@ options 	UNIONFS
 options 	NULLFS
 options 	PPS_SYNC
 
+options 	KDTRACE_MIB_SDT
+
 # Required by athp
 options 	ALQ
 
