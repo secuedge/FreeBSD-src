@@ -99,11 +99,7 @@ struct snd_mixer;
 #define SOUND_PREFVER	SOUND_MODVER
 #define SOUND_MAXVER	SOUND_MODVER
 
-/*
- * By design, limit possible channels for each direction.
- */
-#define SND_MAXHWCHAN		256
-#define SND_MAXVCHANS		SND_MAXHWCHAN
+#define SND_MAXVCHANS		256
 
 #define SD_F_SIMPLEX		0x00000001
 #define SD_F_AUTOVCHAN		0x00000002
@@ -126,9 +122,6 @@ struct snd_mixer;
 
 #define SD_F_PRIO_RD		0x10000000
 #define SD_F_PRIO_WR		0x20000000
-#define SD_F_PRIO_SET		(SD_F_PRIO_RD | SD_F_PRIO_WR)
-#define SD_F_DIR_SET		0x40000000
-#define SD_F_TRANSIENT		0xf0000000
 
 #define SD_F_BITS		"\020"					\
 				"\001SIMPLEX"				\
@@ -146,8 +139,7 @@ struct snd_mixer;
 				"\015EQ_BYPASSED"			\
 				"\016EQ_PC"				\
 				"\035PRIO_RD"				\
-				"\036PRIO_WR"				\
-				"\037DIR_SET"
+				"\036PRIO_WR"
 
 #define PCM_ALIVE(x)		((x) != NULL && (x)->lock != NULL &&	\
 				 !((x)->flags & SD_F_DYING))
@@ -162,7 +154,6 @@ struct snd_mixer;
 /* many variables should be reduced to a range. Here define a macro */
 #define RANGE(var, low, high) (var) = \
 	(((var)<(low))? (low) : ((var)>(high))? (high) : (var))
-#define DSP_BUFFSIZE (8192)
 
 /* make figuring out what a format is easier. got AFMT_STEREO already */
 #define AFMT_32BIT (AFMT_S32_LE | AFMT_S32_BE | AFMT_U32_LE | AFMT_U32_BE)
@@ -234,29 +225,14 @@ enum {
 	SND_DEV_MIDIN,		/* Raw midi access */
 	SND_DEV_DSP,		/* Digitized voice /dev/dsp */
 	SND_DEV_STATUS,		/* /dev/sndstat */
-	SND_DEV_DSPHW_PLAY,	/* specific playback channel */
-	SND_DEV_DSPHW_VPLAY,	/* specific virtual playback channel */
-	SND_DEV_DSPHW_REC,	/* specific record channel */
-	SND_DEV_DSPHW_VREC,	/* specific virtual record channel */
 };
 
 #define DSP_DEFAULT_SPEED	8000
 
-#define ON		1
-#define OFF		0
-
-extern int pcm_veto_load;
 extern int snd_unit;
 extern int snd_verbose;
 extern devclass_t pcm_devclass;
 extern struct unrhdr *pcmsg_unrhdr;
-
-/*
- * some macros for debugging purposes
- * DDB/DEB to enable/disable debugging stuff
- * BVDDB   to enable debugging when bootverbose
- */
-#define BVDDB(x) if (bootverbose) x
 
 #ifndef DEB
 #define DEB(x)
@@ -267,14 +243,11 @@ SYSCTL_DECL(_hw_snd);
 int pcm_chnalloc(struct snddev_info *d, struct pcm_channel **ch, int direction,
     pid_t pid, char *comm);
 
-void pcm_chn_add(struct snddev_info *d, struct pcm_channel *ch);
-int pcm_chn_remove(struct snddev_info *d, struct pcm_channel *ch);
-
 int pcm_addchan(device_t dev, int dir, kobj_class_t cls, void *devinfo);
 unsigned int pcm_getbuffersize(device_t dev, unsigned int minbufsz, unsigned int deflt, unsigned int maxbufsz);
-int pcm_register(device_t dev, void *devinfo, int numplay, int numrec);
+void pcm_init(device_t dev, void *devinfo);
+int pcm_register(device_t dev, char *str);
 int pcm_unregister(device_t dev);
-int pcm_setstatus(device_t dev, char *str);
 u_int32_t pcm_getflags(device_t dev);
 void pcm_setflags(device_t dev, u_int32_t val);
 void *pcm_getdevinfo(device_t dev);
@@ -340,6 +313,10 @@ struct snddev_info {
 	struct sysctl_ctx_list play_sysctl_ctx, rec_sysctl_ctx;
 	struct sysctl_oid *play_sysctl_tree, *rec_sysctl_tree;
 	struct cv cv;
+	struct unrhdr *p_unr;
+	struct unrhdr *vp_unr;
+	struct unrhdr *r_unr;
+	struct unrhdr *vr_unr;
 };
 
 void	sound_oss_sysinfo(oss_sysinfo *);

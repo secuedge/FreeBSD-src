@@ -91,6 +91,10 @@
         ..
         usr.sbin
             dtrace
+                amd64
+                    arrays
+                    ..
+                ..
                 common
                     aggs
                     ..
@@ -269,10 +273,6 @@
                     ustack
                     ..
                 ..
-                amd64
-                    arrays
-                    ..
-                ..
             ..
             zfsd
             ..
@@ -372,6 +372,8 @@
             ..
             rpc
             ..
+            secure
+            ..
             setjmp
             ..
             ssp
@@ -424,6 +426,8 @@
         libexecinfo
         ..
         libkvm
+        ..
+        libmd
         ..
         libmp
         ..
@@ -789,6 +793,10 @@
         ..
         compat32
         ..
+        cam
+            ctl
+            ..
+        ..
         devrandom
         ..
         dtrace
@@ -845,6 +853,8 @@
             execve
             ..
             pipe
+            ..
+            tty
             ..
         ..
         kqueue
@@ -1079,8 +1089,6 @@
         ..
         cut
         ..
-        dc
-        ..
         diff
         ..
         diff3
@@ -1088,6 +1096,8 @@
         dirname
         ..
         du
+        ..
+        env
         ..
         factor
         ..
@@ -1199,11 +1209,11 @@
         ..
         tsort
         ..
-        units
-        ..
         unifdef
         ..
         uniq
+        ..
+        units
         ..
         unzip
         ..
@@ -1238,6 +1248,8 @@
         jail
         ..
         makefs
+        ..
+        mixer
         ..
         newsyslog
         ..

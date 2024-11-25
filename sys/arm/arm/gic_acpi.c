@@ -227,7 +227,7 @@ gic_acpi_attach(device_t dev)
 	/*
 	 * Controller is root:
 	 */
-	if (intr_pic_claim_root(dev, xref, arm_gic_intr, sc) != 0) {
+	if (intr_pic_claim_root(dev, xref, arm_gic_intr, sc, INTR_ROOT_IRQ) != 0) {
 		device_printf(dev, "could not set PIC as a root\n");
 		intr_pic_deregister(dev, xref);
 		goto cleanup;
@@ -280,7 +280,7 @@ madt_gicv2m_handler(ACPI_SUBTABLE_HEADER *entry, void *arg)
 		device_printf(dev, "frame: %x %lx %x %u %u\n", msi->MsiFrameId,
 		    msi->BaseAddress, msi->Flags, msi->SpiCount, msi->SpiBase);
 
-		cdev = device_add_child(dev, NULL, -1);
+		cdev = device_add_child(dev, NULL, DEVICE_UNIT_ANY);
 		if (cdev == NULL)
 			return;
 

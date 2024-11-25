@@ -832,6 +832,7 @@ if_attach_internal(struct ifnet *ifp, bool vmove)
 	MPASS(ifindex_table[ifp->if_index].ife_ifnet == ifp);
 
 #ifdef VIMAGE
+	CURVNET_ASSERT_SET();
 	ifp->if_vnet = curvnet;
 	if (ifp->if_home_vnet == NULL)
 		ifp->if_home_vnet = curvnet;
@@ -1037,12 +1038,10 @@ if_purgeaddrs(struct ifnet *ifp)
 #ifdef INET
 		/* XXX: Ugly!! ad hoc just for INET */
 		if (ifa->ifa_addr->sa_family == AF_INET) {
-			struct ifaliasreq ifr;
+			struct ifreq ifr;
 
 			bzero(&ifr, sizeof(ifr));
-			ifr.ifra_addr = *ifa->ifa_addr;
-			if (ifa->ifa_dstaddr)
-				ifr.ifra_broadaddr = *ifa->ifa_dstaddr;
+			ifr.ifr_addr = *ifa->ifa_addr;
 			if (in_control(NULL, SIOCDIFADDR, (caddr_t)&ifr, ifp,
 			    NULL) == 0)
 				continue;
@@ -2392,6 +2391,7 @@ const struct ifcap_nv_bit_name ifcap_nv_bit_names[] = {
 const struct ifcap_nv_bit_name ifcap2_nv_bit_names[] = {
 	CAP2NV(RXTLS4),
 	CAP2NV(RXTLS6),
+	CAP2NV(IPSEC_OFFLOAD),
 	{0, NULL}
 };
 #undef CAPNV
@@ -2612,7 +2612,12 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		    (ifp->if_flags & IFF_UP) == 0) {
 			do_ifup = 1;
 		}
-		/* See if permanently promiscuous mode bit is about to flip */
+
+		/*
+		 * See if the promiscuous mode or allmulti bits are about to
+		 * flip.  They require special handling because in-kernel
+		 * consumers may indepdently toggle them.
+		 */
 		if ((ifp->if_flags ^ new_flags) & IFF_PPROMISC) {
 			if (new_flags & IFF_PPROMISC)
 				ifp->if_flags |= IFF_PROMISC;
@@ -2622,6 +2627,12 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
                                 if_printf(ifp, "permanently promiscuous mode %s\n",
                                     ((new_flags & IFF_PPROMISC) ?
                                      "enabled" : "disabled"));
+		}
+		if ((ifp->if_flags ^ new_flags) & IFF_PALLMULTI) {
+			if (new_flags & IFF_PALLMULTI)
+				ifp->if_flags |= IFF_ALLMULTI;
+			else if (ifp->if_amcount == 0)
+				ifp->if_flags &= ~IFF_ALLMULTI;
 		}
 		ifp->if_flags = (ifp->if_flags & IFF_CANTCHANGE) |
 			(new_flags &~ IFF_CANTCHANGE);
@@ -3384,7 +3395,8 @@ int
 if_allmulti(struct ifnet *ifp, int onswitch)
 {
 
-	return (if_setflag(ifp, IFF_ALLMULTI, 0, &ifp->if_amcount, onswitch));
+	return (if_setflag(ifp, IFF_ALLMULTI, IFF_PALLMULTI, &ifp->if_amcount,
+	    onswitch));
 }
 
 struct ifmultiaddr *
@@ -4782,12 +4794,6 @@ if_getifaddr(const if_t ifp)
 }
 
 int
-if_getamcount(const if_t ifp)
-{
-	return (ifp->if_amcount);
-}
-
-int
 if_setsendqready(if_t ifp)
 {
 	IFQ_SET_READY(&ifp->if_snd);
@@ -5147,6 +5153,12 @@ void *
 if_getl2com(if_t ifp)
 {
 	return (ifp->if_l2com);
+}
+
+void
+if_setipsec_accel_methods(if_t ifp, const struct if_ipsec_accel_methods *m)
+{
+	ifp->if_ipsec_accel_m = m;
 }
 
 #ifdef DDB

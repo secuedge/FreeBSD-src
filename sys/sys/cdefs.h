@@ -124,8 +124,6 @@
 #define	__STRING(x)	#x		/* stringify without expanding x */
 #define	__XSTRING(x)	__STRING(x)	/* expand x, then stringify */
 
-#define	__const		const		/* define reserved names to standard */
-#define	__signed	signed
 #define	__volatile	volatile
 #if defined(__cplusplus)
 #define	__inline	inline		/* convert to C++ keyword */
@@ -139,26 +137,10 @@
 #define	__P(protos)	()		/* traditional C preprocessor */
 #define	__CONCAT(x,y)	x/**/y
 #define	__STRING(x)	"x"
-
 #if !defined(__CC_SUPPORTS___INLINE)
-#define	__const				/* delete pseudo-ANSI C keywords */
+/* Just delete these in a K&R environment */
 #define	__inline
-#define	__signed
 #define	__volatile
-/*
- * In non-ANSI C environments, new programs will want ANSI-only C keywords
- * deleted from the program and old programs will want them left alone.
- * When using a compiler other than gcc, programs using the ANSI C keywords
- * const, inline etc. as normal identifiers should define -DNO_ANSI_KEYWORDS.
- * When using "gcc -traditional", we assume that this is the intent; if
- * __GNUC__ is defined but __STDC__ is not, we leave the new keywords alone.
- */
-#ifndef	NO_ANSI_KEYWORDS
-#define	const				/* delete ANSI C keywords */
-#define	inline
-#define	signed
-#define	volatile
-#endif	/* !NO_ANSI_KEYWORDS */
 #endif	/* !__CC_SUPPORTS___INLINE */
 #endif	/* !(__STDC__ || __cplusplus) */
 
@@ -172,6 +154,7 @@
 #define	__pure2		__attribute__((__const__))
 #define	__unused	__attribute__((__unused__))
 #define	__used		__attribute__((__used__))
+#define __deprecated	__attribute__((__deprecated__))
 #define	__packed	__attribute__((__packed__))
 #define	__aligned(x)	__attribute__((__aligned__(x)))
 #define	__section(x)	__attribute__((__section__(x)))
@@ -244,8 +227,8 @@
 	_Generic(expr, t: yes, default: no)
 #elif !defined(__cplusplus)
 #define	__generic(expr, t, yes, no)					\
-	__builtin_choose_expr(						\
-	    __builtin_types_compatible_p(__typeof((0, (expr))), t), yes, no)
+	__builtin_choose_expr(__builtin_types_compatible_p(		\
+	    __typeof(((void)0, (expr))), t), yes, no)
 #endif
 
 /*
@@ -321,6 +304,13 @@
 #define	__restrict	restrict
 #endif
 
+/*
+ * All modern compilers have explicit branch prediction so that the CPU back-end
+ * can hint to the processor and also so that code blocks can be reordered such
+ * that the predicted path sees a more linear flow, thus improving cache
+ * behavior, etc. Use sparingly, except in performance critical code where
+ * they make things measurably faster.
+ */
 #define	__predict_true(exp)     __builtin_expect((exp), 1)
 #define	__predict_false(exp)    __builtin_expect((exp), 0)
 
@@ -349,9 +339,7 @@
 
 /*
  * Compiler-dependent macros to declare that functions take printf-like
- * or scanf-like arguments.  They are null except for versions of gcc
- * that are known to support the features properly (old versions of gcc-2
- * didn't permit keeping the keywords out of the application namespace).
+ * or scanf-like arguments.
  */
 #define	__printflike(fmtarg, firstvararg) \
 	    __attribute__((__format__ (__printf__, fmtarg, firstvararg)))
@@ -363,8 +351,21 @@
 #define	__strftimelike(fmtarg, firstvararg) \
 	    __attribute__((__format__ (__strftime__, fmtarg, firstvararg)))
 
+/*
+ * Like __printflike, but allows fmtarg to be NULL. FreeBSD invented 'printf0'
+ * for this because older versions of gcc issued warnings for NULL first args.
+ * Clang has always had printf and printf0 as aliases. gcc 11.0 now follows
+ * clang. So now this is an alias for __printflike, or nothing. In the future
+ * _Nullable or _Nonnull will replace this.
+ * XXX Except that doesn't work, so for now revert to printf0 for clang and
+ * the FreeBSD gcc until I can work this out.
+ */
+#if defined(__clang__) || (defined(__GNUC__) && defined (__FreeBSD_cc_version))
 #define	__printf0like(fmtarg, firstvararg) \
 	    __attribute__((__format__ (__printf0__, fmtarg, firstvararg)))
+#else
+#define	__printf0like(fmtarg, firstvararg)
+#endif
 
 #define	__strong_reference(sym,aliassym)	\
 	extern __typeof (sym) aliassym __attribute__ ((__alias__ (#sym)))
@@ -512,9 +513,22 @@
 #define	_POSIX_C_SOURCE		199209
 #endif
 
-/* Deal with various X/Open Portability Guides and Single UNIX Spec. */
+/*
+ * Deal with various X/Open Portability Guides and Single UNIX Spec. We use the
+ * '- 0' construct so software that defines _XOPEN_SOURCE to nothing doesn't
+ * cause errors. X/Open CAE Specification, August 1994, System Interfaces and
+ * Headers, Issue 4, Version 2 section 2.2 states an empty definition means the
+ * same thing as _POSIX_C_SOURCE == 2. This broadly mirrors "System V Interface
+ * Definition, Fourth Edition", but earlier editions suggest some ambiguity.
+ * However, FreeBSD has histoically implemented this as a NOP, so we just
+ * document what it should be for now to not break ports gratuitously.
+ */
 #ifdef _XOPEN_SOURCE
-#if _XOPEN_SOURCE - 0 >= 700
+#if _XOPEN_SOURCE - 0 >= 800
+#define	__XSI_VISIBLE		800
+#undef _POSIX_C_SOURCE
+#define	_POSIX_C_SOURCE		202405
+#elif _XOPEN_SOURCE - 0 >= 700
 #define	__XSI_VISIBLE		700
 #undef _POSIX_C_SOURCE
 #define	_POSIX_C_SOURCE		200809
@@ -526,6 +540,8 @@
 #define	__XSI_VISIBLE		500
 #undef _POSIX_C_SOURCE
 #define	_POSIX_C_SOURCE		199506
+#else
+/* #define	_POSIX_C_SOURCE		199209 */
 #endif
 #endif
 
@@ -537,7 +553,10 @@
 #define	_POSIX_C_SOURCE		198808
 #endif
 #ifdef _POSIX_C_SOURCE
-#if _POSIX_C_SOURCE >= 200809
+#if _POSIX_C_SOURCE >= 202405
+#define	__POSIX_VISIBLE		202405
+#define	__ISO_C_VISIBLE		2017
+#elif _POSIX_C_SOURCE >= 200809
 #define	__POSIX_VISIBLE		200809
 #define	__ISO_C_VISIBLE		1999
 #elif _POSIX_C_SOURCE >= 200112
@@ -559,18 +578,25 @@
 #define	__POSIX_VISIBLE		198808
 #define	__ISO_C_VISIBLE		0
 #endif /* _POSIX_C_SOURCE */
+
 /*
- * Both glibc and OpenBSD enable c11 features when _ISOC11_SOURCE is defined, or
- * when compiling with -stdc=c11. A strict reading of the standard would suggest
- * doing it only for the former. However, a strict reading also requires C99
- * mode only, so building with C11 is already undefined. Follow glibc's and
- * OpenBSD's lead for this non-standard configuration for maximum compatibility.
+ * When we've explicitly asked for a newer C version, make the C variable
+ * visible by default. Also honor the glibc _ISOC{11,23}_SOURCE macros
+ * extensions. Both glibc and OpenBSD do this, even when a more strict
+ * _POSIX_C_SOURCE has been requested, and it makes good sense (especially for
+ * pre POSIX 2024, since C11 is much nicer than the old C99 base). Continue the
+ * practice with C23, though don't do older standards. Also, GLIBC doesn't have
+ * a _ISOC17_SOURCE, so it's not implemented here. glibc has earlier ISOCxx defines,
+ * but we don't implement those as they are not relevant enough.
  */
-#if _ISOC11_SOURCE || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
+#if _ISOC23_SOURCE || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L)
+#undef __ISO_C_VISIBLE
+#define __ISO_C_VISIBLE		2023
+#elif _ISOC11_SOURCE || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
 #undef __ISO_C_VISIBLE
 #define __ISO_C_VISIBLE		2011
 #endif
-#else
+#else /* _POSIX_C_SOURCE */
 /*-
  * Deal with _ANSI_SOURCE:
  * If it is defined, and no other compilation environment is explicitly
@@ -601,14 +627,20 @@
 #define	__BSD_VISIBLE		0
 #define	__ISO_C_VISIBLE		2011
 #define	__EXT1_VISIBLE		0
+#elif defined(_C23_SOURCE)	/* Localism to specify strict C23 env. */
+#define	__POSIX_VISIBLE		0
+#define	__XSI_VISIBLE		0
+#define	__BSD_VISIBLE		0
+#define	__ISO_C_VISIBLE		2023
+#define	__EXT1_VISIBLE		0
 #else				/* Default environment: show everything. */
-#define	__POSIX_VISIBLE		200809
-#define	__XSI_VISIBLE		700
+#define	__POSIX_VISIBLE		202405
+#define	__XSI_VISIBLE		800
 #define	__BSD_VISIBLE		1
-#define	__ISO_C_VISIBLE		2011
+#define	__ISO_C_VISIBLE		2023
 #define	__EXT1_VISIBLE		1
 #endif
-#endif
+#endif /* _POSIX_C_SOURCE */
 
 /* User override __EXT1_VISIBLE */
 #if defined(__STDC_WANT_LIB_EXT1__)
@@ -711,19 +743,33 @@
  * GCC has the nosanitize attribute, but as a function attribute only, and
  * warns on use as a variable attribute.
  */
-#if __has_attribute(no_sanitize) && defined(__clang__)
+#if __has_feature(address_sanitizer) && defined(__clang__)
 #ifdef _KERNEL
-#define __nosanitizeaddress	__attribute__((no_sanitize("kernel-address")))
-#define __nosanitizememory	__attribute__((no_sanitize("kernel-memory")))
+#define	__nosanitizeaddress	__attribute__((no_sanitize("kernel-address")))
 #else
-#define __nosanitizeaddress	__attribute__((no_sanitize("address")))
-#define __nosanitizememory	__attribute__((no_sanitize("memory")))
+#define	__nosanitizeaddress	__attribute__((no_sanitize("address")))
 #endif
-#define __nosanitizethread	__attribute__((no_sanitize("thread")))
 #else
-#define __nosanitizeaddress
-#define __nosanitizememory
-#define __nosanitizethread
+#define	__nosanitizeaddress
+#endif
+#if __has_feature(coverage_sanitizer) && defined(__clang__)
+#define	__nosanitizecoverage	__attribute__((no_sanitize("coverage")))
+#else
+#define	__nosanitizecoverage
+#endif
+#if __has_feature(memory_sanitizer) && defined(__clang__)
+#ifdef _KERNEL
+#define	__nosanitizememory	__attribute__((no_sanitize("kernel-memory")))
+#else
+#define	__nosanitizememory	__attribute__((no_sanitize("memory")))
+#endif
+#else
+#define	__nosanitizememory
+#endif
+#if __has_feature(thread_sanitizer) && defined(__clang__)
+#define	__nosanitizethread	__attribute__((no_sanitize("thread")))
+#else
+#define	__nosanitizethread
 #endif
 
 /*

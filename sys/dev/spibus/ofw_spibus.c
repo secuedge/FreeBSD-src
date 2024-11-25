@@ -148,7 +148,7 @@ ofw_spibus_attach(device_t dev)
 			free(dinfo, M_DEVBUF);
 			continue;
 		}
-		childdev = device_add_child(dev, NULL, -1);
+		childdev = device_add_child(dev, NULL, DEVICE_UNIT_ANY);
 
 		resource_list_init(&dinfo->opd_dinfo.rl);
 		ofw_bus_intr_to_rl(childdev, child,
@@ -190,6 +190,12 @@ ofw_spibus_add_child(device_t dev, u_int order, const char *name, int unit)
 	return (child);
 }
 
+static void
+ofw_spibus_child_deleted(device_t dev, device_t child)
+{
+	free(device_get_ivars(child), M_DEVBUF);
+}
+
 static const struct ofw_bus_devinfo *
 ofw_spibus_get_devinfo(device_t bus, device_t dev)
 {
@@ -216,6 +222,7 @@ static device_method_t ofw_spibus_methods[] = {
 	/* Bus interface */
 	DEVMETHOD(bus_child_pnpinfo,	ofw_bus_gen_child_pnpinfo),
 	DEVMETHOD(bus_add_child,	ofw_spibus_add_child),
+	DEVMETHOD(bus_child_deleted,	ofw_spibus_child_deleted),
 	DEVMETHOD(bus_get_resource_list, ofw_spibus_get_resource_list),
 
 	/* ofw_bus interface */

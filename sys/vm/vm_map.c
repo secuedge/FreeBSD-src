@@ -1993,8 +1993,15 @@ out:
 	return (result);
 }
 
+#if VM_NRESERVLEVEL <= 1
 static const int aslr_pages_rnd_64[2] = {0x1000, 0x10};
 static const int aslr_pages_rnd_32[2] = {0x100, 0x4};
+#elif VM_NRESERVLEVEL == 2
+static const int aslr_pages_rnd_64[3] = {0x1000, 0x1000, 0x10};
+static const int aslr_pages_rnd_32[3] = {0x100, 0x100, 0x4};
+#else
+#error "Unsupported VM_NRESERVLEVEL"
+#endif
 
 static int cluster_anon = 1;
 SYSCTL_INT(_vm, OID_AUTO, cluster_anon, CTLFLAG_RW,
@@ -2110,9 +2117,24 @@ vm_map_find_aligned(vm_map_t map, vm_offset_t *addr, vm_size_t length,
  */
 int
 vm_map_find(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
-	    vm_offset_t *addr,	/* IN/OUT */
-	    vm_size_t length, vm_offset_t max_addr, int find_space,
-	    vm_prot_t prot, vm_prot_t max, int cow)
+    vm_offset_t *addr,	/* IN/OUT */
+    vm_size_t length, vm_offset_t max_addr, int find_space,
+    vm_prot_t prot, vm_prot_t max, int cow)
+{
+	int rv;
+
+	vm_map_lock(map);
+	rv = vm_map_find_locked(map, object, offset, addr, length, max_addr,
+	    find_space, prot, max, cow);
+	vm_map_unlock(map);
+	return (rv);
+}
+
+int
+vm_map_find_locked(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
+    vm_offset_t *addr,	/* IN/OUT */
+    vm_size_t length, vm_offset_t max_addr, int find_space,
+    vm_prot_t prot, vm_prot_t max, int cow)
 {
 	vm_offset_t alignment, curr_min_addr, min_addr;
 	int gap, pidx, rv, try;
@@ -2120,7 +2142,7 @@ vm_map_find(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 
 	KASSERT((cow & (MAP_STACK_GROWS_DOWN | MAP_STACK_GROWS_UP)) == 0 ||
 	    object == NULL,
-	    ("vm_map_find: non-NULL backing object for stack"));
+	    ("non-NULL backing object for stack"));
 	MPASS((cow & MAP_REMAP) == 0 || (find_space == VMFS_NO_SPACE &&
 	    (cow & (MAP_STACK_GROWS_DOWN | MAP_STACK_GROWS_UP)) == 0));
 	if (find_space == VMFS_OPTIMAL_SPACE && (object == NULL ||
@@ -2143,7 +2165,6 @@ vm_map_find(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 	    (map->flags & MAP_ASLR_IGNSTART) != 0)
 		curr_min_addr = min_addr = vm_map_min(map);
 	try = 0;
-	vm_map_lock(map);
 	if (cluster) {
 		curr_min_addr = map->anon_loc;
 		if (curr_min_addr == 0)
@@ -2190,9 +2211,23 @@ again:
 			 * Find space for allocation, including
 			 * gap needed for later randomization.
 			 */
-			pidx = MAXPAGESIZES > 1 && pagesizes[1] != 0 &&
-			    (find_space == VMFS_SUPER_SPACE || find_space ==
-			    VMFS_OPTIMAL_SPACE) ? 1 : 0;
+			pidx = 0;
+#if VM_NRESERVLEVEL > 0
+			if ((find_space == VMFS_SUPER_SPACE ||
+			    find_space == VMFS_OPTIMAL_SPACE) &&
+			    pagesizes[VM_NRESERVLEVEL] != 0) {
+				/*
+				 * Do not pointlessly increase the space that
+				 * is requested from vm_map_findspace().
+				 * pmap_align_superpage() will only change a
+				 * mapping's alignment if that mapping is at
+				 * least a superpage in size.
+				 */
+				pidx = VM_NRESERVLEVEL;
+				while (pidx > 0 && length < pagesizes[pidx])
+					pidx--;
+			}
+#endif
 			gap = vm_map_max(map) > MAP_32BIT_MAX_ADDR &&
 			    (max_addr == 0 || max_addr > MAP_32BIT_MAX_ADDR) ?
 			    aslr_pages_rnd_64[pidx] : aslr_pages_rnd_32[pidx];
@@ -2214,8 +2249,7 @@ again:
 					MPASS(try == 1);
 					goto again;
 				}
-				rv = KERN_NO_SPACE;
-				goto done;
+				return (KERN_NO_SPACE);
 			}
 		}
 
@@ -2229,16 +2263,14 @@ again:
 				try = 0;
 				goto again;
 			}
-			goto done;
+			return (rv);
 		}
 	} else if ((cow & MAP_REMAP) != 0) {
-		if (!vm_map_range_valid(map, *addr, *addr + length)) {
-			rv = KERN_INVALID_ADDRESS;
-			goto done;
-		}
+		if (!vm_map_range_valid(map, *addr, *addr + length))
+			return (KERN_INVALID_ADDRESS);
 		rv = vm_map_delete(map, *addr, *addr + length);
 		if (rv != KERN_SUCCESS)
-			goto done;
+			return (rv);
 	}
 	if ((cow & (MAP_STACK_GROWS_DOWN | MAP_STACK_GROWS_UP)) != 0) {
 		rv = vm_map_stack_locked(map, *addr, length, sgrowsiz, prot,
@@ -2256,8 +2288,6 @@ again:
 	if (update_anon && rv == KERN_SUCCESS && (map->anon_loc == 0 ||
 	    *addr < map->anon_loc))
 		map->anon_loc = *addr;
-done:
-	vm_map_unlock(map);
 	return (rv);
 }
 
@@ -2656,6 +2686,7 @@ vm_map_pmap_enter(vm_map_t map, vm_offset_t addr, vm_prot_t prot,
 	vm_offset_t start;
 	vm_page_t p, p_start;
 	vm_pindex_t mask, psize, threshold, tmpidx;
+	int psind;
 
 	if ((prot & (VM_PROT_READ | VM_PROT_EXECUTE)) == 0 || object == NULL)
 		return;
@@ -2710,13 +2741,17 @@ vm_map_pmap_enter(vm_map_t map, vm_offset_t addr, vm_prot_t prot,
 				p_start = p;
 			}
 			/* Jump ahead if a superpage mapping is possible. */
-			if (p->psind > 0 && ((addr + ptoa(tmpidx)) &
-			    (pagesizes[p->psind] - 1)) == 0) {
-				mask = atop(pagesizes[p->psind]) - 1;
-				if (tmpidx + mask < psize &&
-				    vm_page_ps_test(p, PS_ALL_VALID, NULL)) {
-					p += mask;
-					threshold += mask;
+			for (psind = p->psind; psind > 0; psind--) {
+				if (((addr + ptoa(tmpidx)) &
+				    (pagesizes[psind] - 1)) == 0) {
+					mask = atop(pagesizes[psind]) - 1;
+					if (tmpidx + mask < psize &&
+					    vm_page_ps_test(p, psind,
+					    PS_ALL_VALID, NULL)) {
+						p += mask;
+						threshold += mask;
+						break;
+					}
 				}
 			}
 		} else if (p_start != NULL) {

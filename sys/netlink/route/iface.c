@@ -322,11 +322,13 @@ dump_iface(struct nl_writer *nw, if_t ifp, const struct nlmsghdr *hdr,
 */
 	if (if_getaddrlen(ifp) != 0) {
 		struct ifaddr *ifa;
+		struct ifa_iter it;
 
 		NET_EPOCH_ENTER(et);
-		ifa = CK_STAILQ_FIRST(&ifp->if_addrhead);
+		ifa = ifa_iter_start(ifp, &it);
 		if (ifa != NULL)
 			dump_sa(nw, IFLA_ADDRESS, ifa->ifa_addr);
+		ifa_iter_finish(&it);
 		NET_EPOCH_EXIT(et);
 	}
 
@@ -1194,17 +1196,17 @@ static int
 handle_deladdr_inet(struct nlmsghdr *hdr, struct nl_parsed_ifa *attrs,
     if_t ifp, struct nlpcb *nlp, struct nl_pstate *npt)
 {
-	struct sockaddr_in *addr = (struct sockaddr_in *)attrs->ifa_local;
+	struct sockaddr *addr = attrs->ifa_local;
 
 	if (addr == NULL)
-		addr = (struct sockaddr_in *)attrs->ifa_address;
+		addr = attrs->ifa_address;
 
 	if (addr == NULL) {
 		nlmsg_report_err_msg(npt, "empty IFA_ADDRESS/IFA_LOCAL");
 		return (EINVAL);
 	}
 
-	struct ifreq req = { .ifr_addr = *(struct sockaddr *)addr };
+	struct ifreq req = { .ifr_addr = *addr };
 
 	return (in_control_ioctl(SIOCDIFADDR, &req, ifp, nlp_get_cred(nlp)));
 }
@@ -1427,7 +1429,7 @@ rtnl_handle_ifdetach(void *arg, if_t ifp)
 }
 
 static void
-rtnl_handle_iflink(void *arg, if_t ifp)
+rtnl_handle_iflink(void *arg, if_t ifp, int link_state __unused)
 {
 	NL_LOG(LOG_DEBUG2, "ifnet %s", if_name(ifp));
 	rtnl_handle_ifevent(ifp, NL_RTM_NEWLINK, 0);

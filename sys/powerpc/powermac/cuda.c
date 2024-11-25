@@ -246,7 +246,7 @@ cuda_attach(device_t dev)
 			device_printf(dev, "CUDA child <%s>\n",name);
 
 		if (strncmp(name, "adb", 4) == 0) {
-			sc->adb_bus = device_add_child(dev,"adb",-1);
+			sc->adb_bus = device_add_child(dev,"adb",DEVICE_UNIT_ANY);
 		}
 	}
 
@@ -259,6 +259,11 @@ cuda_attach(device_t dev)
 
 static int cuda_detach(device_t dev) {
 	struct cuda_softc *sc;
+	int error;
+
+	error = bus_generic_detach(dev);
+	if (error != 0)
+		return (error);
 
 	sc = device_get_softc(dev);
 
@@ -267,7 +272,7 @@ static int cuda_detach(device_t dev) {
 	bus_release_resource(dev, SYS_RES_MEMORY, sc->sc_memrid, sc->sc_memr);
 	mtx_destroy(&sc->sc_mutex);
 
-	return (bus_generic_detach(dev));
+	return (0);
 }
 
 static uint8_t

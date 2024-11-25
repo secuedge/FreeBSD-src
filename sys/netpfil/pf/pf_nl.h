@@ -55,6 +55,12 @@ enum {
 	PFNL_CMD_SET_LIMIT = 17,
 	PFNL_CMD_GET_LIMIT = 18,
 	PFNL_CMD_BEGIN_ADDRS = 19,
+	PFNL_CMD_ADD_ADDR = 20,
+	PFNL_CMD_GET_ADDRS = 21,
+	PFNL_CMD_GET_ADDR = 22,
+	PFNL_CMD_GET_RULESETS = 23,
+	PFNL_CMD_GET_RULESET = 24,
+	PFNL_CMD_GET_SRCNODES = 25,
 	__PFNL_CMD_MAX,
 };
 #define PFNL_CMD_MAX (__PFNL_CMD_MAX -1)
@@ -254,6 +260,8 @@ enum pf_rule_type_t {
 	PF_RT_STATES_TOTAL	= 70, /* u64 */
 	PF_RT_SRC_NODES		= 71, /* u64 */
 	PF_RT_ANCHOR_CALL	= 72, /* string */
+	PF_RT_RCV_IFNAME	= 73, /* string */
+	PF_RT_MAX_SRC_CONN	= 74, /* u32 */
 };
 
 enum pf_addrule_type_t {
@@ -354,6 +362,58 @@ enum pf_limit_types_t {
 enum pf_begin_addrs_types_t {
 	PF_BA_UNSPEC,
 	PF_BA_TICKET		= 1, /* u32 */
+};
+
+enum pf_pool_addr_types_t {
+	PF_PA_UNSPEC,
+	PF_PA_ADDR		= 1, /* nested, pf_addr_wrap */
+	PF_PA_IFNAME		= 2, /* string */
+};
+
+enum pf_add_addr_types_t {
+	PF_AA_UNSPEC,
+	PF_AA_ACTION		= 1, /* u32 */
+	PF_AA_TICKET		= 2, /* u32 */
+	PF_AA_NR		= 3, /* u32 */
+	PF_AA_R_NUM		= 4, /* u32 */
+	PF_AA_R_ACTION		= 5, /* u8 */
+	PF_AA_R_LAST		= 6, /* u8 */
+	PF_AA_AF		= 7, /* u8 */
+	PF_AA_ANCHOR		= 8, /* string */
+	PF_AA_ADDR		= 9, /* nested, pf_pooladdr */
+};
+
+enum pf_get_rulesets_types_t {
+	PF_RS_UNSPEC,
+	PF_RS_PATH		= 1, /* string */
+	PF_RS_NR		= 2, /* u32 */
+	PF_RS_NAME		= 3, /* string */
+};
+
+enum pf_threshold_types_t {
+	PF_TH_UNSPEC,
+	PF_TH_LIMIT		= 1, /* u32 */
+	PF_TH_SECONDS		= 2, /* u32 */
+	PF_TH_COUNT		= 3, /* u32 */
+	PF_TH_LAST		= 4, /* u32 */
+};
+
+enum pf_srcnodes_types_t {
+	PF_SN_UNSPEC,
+	PF_SN_ADDR		= 1, /* nested, pf_addr */
+	PF_SN_RADDR		= 2, /* nested, pf_addr */
+	PF_SN_RULE_NR		= 3, /* u32 */
+	PF_SN_BYTES_IN		= 4, /* u64 */
+	PF_SN_BYTES_OUT		= 5, /* u64 */
+	PF_SN_PACKETS_IN	= 6, /* u64 */
+	PF_SN_PACKETS_OUT	= 7, /* u64 */
+	PF_SN_STATES		= 8, /* u32 */
+	PF_SN_CONNECTIONS	= 9, /* u32 */
+	PF_SN_AF		= 10, /* u8 */
+	PF_SN_RULE_TYPE		= 11, /* u8 */
+	PF_SN_CREATION		= 12, /* u64 */
+	PF_SN_EXPIRE		= 13, /* u64 */
+	PF_SN_CONNECTION_RATE	= 14, /* nested, pf_threshold */
 };
 
 #ifdef _KERNEL
