@@ -8749,6 +8749,19 @@ pf_route(struct mbuf **m, struct pf_krule *r, struct ifnet *oifp,
 			s->orig_kif = oifp->if_pf_kif;
 		}
 
+		if (ifp == NULL && (pd->af != pd->naf)) {
+			/* We're in the AFTO case. Do a route lookup. */
+			struct nhop_object *nh;
+			nh = fib4_lookup(M_GETFIB(*m), ip->ip_dst, 0, NHR_NONE, 0);
+			if (nh) {
+				ifp = nh->nh_ifp;
+
+				/* Use the gateway if needed. */
+				if (nh->nh_flags & NHF_GATEWAY)
+					dst.sin_addr = nh->gw4_sa.sin_addr;
+			}
+		}
+
 		PF_STATE_UNLOCK(s);
 	}
 	/* If pfsync'd */
@@ -9075,6 +9088,19 @@ pf_route6(struct mbuf **m, struct pf_krule *r, struct ifnet *oifp,
 		    s->kif == V_pfi_all) {
 			s->kif = kif;
 			s->orig_kif = oifp->if_pf_kif;
+		}
+
+		if (ifp == NULL && (pd->af != pd->naf)) {
+			struct nhop_object *nh;
+			nh = fib6_lookup(M_GETFIB(*m), &ip6->ip6_dst, 0, NHR_NONE, 0);
+			if (nh) {
+				ifp = nh->nh_ifp;
+
+				/* Use the gateway if needed. */
+				if (nh->nh_flags & NHF_GATEWAY)
+					bcopy(&dst.sin6_addr, &nh->gw6_sa.sin6_addr,
+					    sizeof(dst.sin6_addr));
+			}
 		}
 	}
 
